@@ -1,0 +1,17 @@
+# Core
+pydantic-settings
+python-dotenv
+
+# Databases
+neo4j
+psycopg2-binary
+
+# NLP
+spacy
+
+# Task Queue
+redis
+celery
+
+# Object Storage
+minio

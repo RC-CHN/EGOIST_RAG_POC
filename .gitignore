@@ -1,0 +1,24 @@
+# Environments
+.env
+.venv
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Docker
+neo4j/
+postgres/
+redis/
+minio/
+
+# IDE
+.idea/
+.vscode/
+
+# Other
+*.log
