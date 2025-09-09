@@ -6,8 +6,9 @@ python-dotenv
 neo4j
 psycopg2-binary
 
-# NLP
-spacy
+# NLP & LLM
+# spacy  <- We will use LLM first
+openai
 
 # Task Queue
 redis
