@@ -8,9 +8,9 @@ services:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
     volumes:
-      - ./neo4j/data:/data
-      - ./neo4j/logs:/logs
-      - ./neo4j/conf:/var/lib/neo4j/conf
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_conf:/var/lib/neo4j/conf
     environment:
       - NEO4J_AUTH=neo4j/password
       - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
@@ -22,7 +22,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres/data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
@@ -34,7 +34,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./redis/data:/data
+      - redis_data:/data
 
   minio:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
@@ -43,8 +43,16 @@ services:
       - "9000:9000"  # API
       - "9001:9001"  # Console
     volumes:
-      - ./minio/data:/data
+      - minio_data:/data
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     command: server /data --console-address ":9001"
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_conf:
+  postgres_data:
+  redis_data:
+  minio_data:

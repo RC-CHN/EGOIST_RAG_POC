@@ -5,6 +5,7 @@ import json
 import re
 import argparse
 from typing import Any, Dict, List
+from collections import defaultdict
 
 from openai import OpenAI
 from neo4j import GraphDatabase, Driver
@@ -259,23 +260,40 @@ def ingest_graph_to_neo4j(driver: Driver, graph_data: Dict[str, Any]):
     entities = graph_data.get('entities', [])
     relationships = graph_data.get('relationships', [])
 
-    with driver.session() as session:
-        for entity in entities:
-            name = entity['name']
-            etype = entity.get('type', 'ENTITY')
-            lbl = _safe_label(etype)
-            session.run(f"MERGE (n:`{lbl}` {{name: $name}})", name=name)
+    # Group entities by label for batching
+    entities_by_label = defaultdict(list)
+    for entity in entities:
+        label = _safe_label(entity.get('type', 'ENTITY'))
+        entities_by_label[label].append(entity)
 
-        for rel in relationships:
-            rel_type = rel.get('type')
-            if not rel_type or '`' in rel_type:
-                print(f"Skipping relationship with invalid type: {rel_type}")
-                continue
-            query = f"""
-            MATCH (a {{name: $source}}), (b {{name: $target}})
-            MERGE (a)-[:`{rel_type}`]->(b)
-            """
-            session.run(query, source=rel['source'], target=rel['target'])
+    with driver.session() as session:
+        # Ingest entities in batches by label
+        for label, entity_list in entities_by_label.items():
+            # Using f-string for the label is safe here because `_safe_label` sanitizes it
+            query = f"UNWIND $entities AS entity MERGE (n:`{label}` {{name: entity.name}})"
+            session.run(query, entities=entity_list)
+
+        # Ingest relationships in a single batch using APOC
+        if relationships:
+            # We need to make sure we don't have backticks in the relationship type for APOC
+            valid_rels = []
+            for rel in relationships:
+                rel_type = rel.get('type')
+                if rel_type and '`' not in rel_type:
+                    # APOC expects the type as a string, no need to pre-format
+                    valid_rels.append(rel)
+                else:
+                    print(f"Skipping relationship with invalid type: {rel_type}")
+
+            if valid_rels:
+                # Use apoc.create.relationship for dynamic relationship types
+                query = """
+                UNWIND $rels AS rel
+                MATCH (a {name: rel.source}), (b {name: rel.target})
+                CALL apoc.create.relationship(a, rel.type, {}, b) YIELD rel as r
+                RETURN count(r)
+                """
+                session.run(query, rels=valid_rels)
 
     print(f"Ingested {len(entities)} entities and {len(relationships)} relationships.")
 
@@ -285,16 +303,25 @@ def ingest_graph_to_neo4j(driver: Driver, graph_data: Dict[str, Any]):
 # ------------------------
 def main():
     parser = argparse.ArgumentParser(description="Extract a knowledge graph from text and ingest it into Neo4j.")
-    parser.add_argument("text_input", type=str, help="The input text to process.")
+    parser.add_argument("text_input", type=str, nargs='?', default=None, help="The input text to process. If not provided, reads from stdin.")
     args = parser.parse_args()
+
+    if args.text_input:
+        text_to_process = args.text_input
+    elif not sys.stdin.isatty():
+        text_to_process = sys.stdin.read()
+    else:
+        print("Error: No text provided. Please provide text as an argument or pipe it via stdin.", file=sys.stderr)
+        sys.exit(1)
+
 
     llm_client = get_llm_client()
     neo4j_driver = get_neo4j_driver()
 
     try:
-        extracted_data = extract_graph_from_text(llm_client, args.text_input)
+        extracted_data = extract_graph_from_text(llm_client, text_to_process)
         print("--- Parsed JSON ---")
-        print(json.dumps(extracted_data, ensure_ascii=False))
+        print(json.dumps(extracted_data, ensure_ascii=False, indent=2))
         ingest_graph_to_neo4j(neo4j_driver, extracted_data)
 
         print("\n--- Verification ---")
