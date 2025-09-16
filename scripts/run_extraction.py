@@ -143,37 +143,19 @@ def _try_parse_json(candidate: str) -> Dict[str, Any]:
         )
 
 
-def _call_llm_for_json(client: OpenAI, prompt: str) -> str:
-    """Prefer strict JSON mode if backend supports it; fallback to plain text."""
-    try:
-        resp = client.chat.completions.create(
-            model=settings.llm.model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            response_format={"type": "json_object"},
-        )
-        return resp.choices[0].message.content or ""
-    except Exception:
-        resp = client.chat_completions.create(  # some gateways alias; fallback to standard if needed
-            model=settings.llm.model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        ) if hasattr(client, "chat_completions") else client.chat.completions.create(
-            model=settings.llm.model_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        )
-        return resp.choices[0].message.content or ""
-
-
 # ------------------------
 # Extraction & normalization
 # ------------------------
-def extract_graph_from_text(client: OpenAI, text: str) -> Dict[str, Any]:
-    prompt = EXTRACTION_PROMPT_TEMPLATE.format(text_input=text)
+def extract_graph_from_text(client: LLMClient, text: str, images: List[str] | None = None) -> Dict[str, Any]:
+    user_prompt = USER_PROMPT_TEMPLATE.format(text_input=text)
 
     print("--- Calling LLM for extraction ---")
-    content = _call_llm_for_json(client, prompt)
+    content = client.generate(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        images=images,
+        json_mode=True
+    )
 
     print("--- LLM Response ---")
     print(f"Raw LLM Response:\n{content}\n")
