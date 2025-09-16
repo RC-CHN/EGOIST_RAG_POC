@@ -7,7 +7,6 @@ import argparse
 from typing import Any, Dict, List
 from collections import defaultdict
 
-from openai import OpenAI
 from neo4j import GraphDatabase, Driver
 
 # Add the project root to the Python path
@@ -16,8 +15,9 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.config.settings import settings
+from src.llm.client import LLMClient
 
-EXTRACTION_PROMPT_TEMPLATE = """
+SYSTEM_PROMPT = """
 You are a data extraction expert. Your task is to extract entities and relationships from the text and format them as a single, valid JSON object.
 
 **Instructions:**
@@ -30,23 +30,14 @@ You are a data extraction expert. Your task is to extract entities and relations
 **Example:**
 Text: 'Elon Musk, the founder of SpaceX, is also involved with Neuralink.'
 JSON Output: {{"entities": [{{"name": "Elon Musk", "type": "PERSON"}}, {{"name": "SpaceX", "type": "ORGANIZATION"}}, {{"name": "Neuralink", "type": "ORGANIZATION"}}], "relationships": [{{"source": "Elon Musk", "target": "SpaceX", "type": "IS_FOUNDER_OF"}}, {{"source": "Elon Musk", "target": "Neuralink", "type": "IS_INVOLVED_WITH"}}]}}
-
-**Text to Process:**
-Text: '{text_input}'
-JSON Output:
 """.strip()
+
+USER_PROMPT_TEMPLATE = "Text: '{text_input}'\nJSON Output:"
 
 
 # ------------------------
 # Clients
 # ------------------------
-def get_llm_client() -> OpenAI:
-    return OpenAI(
-        api_key=settings.llm.api_key,
-        base_url=settings.llm.base_url
-    )
-
-
 def get_neo4j_driver() -> Driver:
     return GraphDatabase.driver(
         settings.neo4j.uri,
@@ -304,6 +295,7 @@ def ingest_graph_to_neo4j(driver: Driver, graph_data: Dict[str, Any]):
 def main():
     parser = argparse.ArgumentParser(description="Extract a knowledge graph from text and ingest it into Neo4j.")
     parser.add_argument("text_input", type=str, nargs='?', default=None, help="The input text to process. If not provided, reads from stdin.")
+    parser.add_argument("--images", type=str, nargs='*', help="A list of image file paths or URLs to include for context.")
     args = parser.parse_args()
 
     if args.text_input:
@@ -315,11 +307,11 @@ def main():
         sys.exit(1)
 
 
-    llm_client = get_llm_client()
+    llm_client = LLMClient()
     neo4j_driver = get_neo4j_driver()
 
     try:
-        extracted_data = extract_graph_from_text(llm_client, text_to_process)
+        extracted_data = extract_graph_from_text(llm_client, text_to_process, images=args.images)
         print("--- Parsed JSON ---")
         print(json.dumps(extracted_data, ensure_ascii=False, indent=2))
         ingest_graph_to_neo4j(neo4j_driver, extracted_data)
