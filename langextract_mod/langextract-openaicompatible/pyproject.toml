@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langextract-openaicompatible"
+version = "0.1.0"
+description = "LangExtract provider plugin for OpenAICompatible"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+dependencies = [
+    "langextract>=1.0.0",
+    "openai>=1.50.0"
+]
+
+[project.entry-points."langextract.providers"]
+openaicompatible = "langextract_openaicompatible.provider:OpenAICompatibleLanguageModel"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["langextract_openaicompatible*"]
